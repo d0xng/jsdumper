@@ -359,15 +359,25 @@ async function main() {
       
       try {
         const downloaded = await downloadFiles([url], tempDir);
-        if (downloaded.length > 0) {
-          log(`Processing: ${downloaded[0].localPath}`, 'cyan');
-          const result = await processFile(downloaded[0].localPath);
-          if (result) {
-            results = [result];
-          }
+        if (downloaded.length === 0) {
+          log(`Error: Failed to download ${url}`, 'red');
+          process.exit(1);
+        }
+        
+        log(`Downloaded successfully: ${downloaded[0].localPath}`, 'green');
+        log(`Processing: ${downloaded[0].localPath}`, 'cyan');
+        const result = await processFile(downloaded[0].localPath);
+        if (result) {
+          results = [result];
+        } else {
+          log(`Error: Failed to process downloaded file`, 'red');
+          process.exit(1);
         }
       } catch (error) {
         log(`Error downloading/processing URL: ${error.message}`, 'red');
+        if (!program.opts().quiet) {
+          console.error(error);
+        }
         process.exit(1);
       }
     }

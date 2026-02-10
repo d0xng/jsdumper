@@ -306,7 +306,9 @@ function downloadFile(url, outputPath) {
       // Handle redirects
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         file.close();
-        fs.unlinkSync(outputPath);
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
         return downloadFile(response.headers.location, outputPath)
           .then(resolve)
           .catch(reject);
@@ -314,8 +316,10 @@ function downloadFile(url, outputPath) {
       
       if (response.statusCode !== 200) {
         file.close();
-        fs.unlinkSync(outputPath);
-        reject(new Error(`Failed to download: ${response.statusCode} ${response.statusMessage}`));
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+        reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
         return;
       }
       
@@ -323,7 +327,26 @@ function downloadFile(url, outputPath) {
       
       file.on('finish', () => {
         file.close();
-        resolve();
+        // Verify file was downloaded and has content
+        if (fs.existsSync(outputPath)) {
+          const stats = fs.statSync(outputPath);
+          if (stats.size === 0) {
+            fs.unlinkSync(outputPath);
+            reject(new Error('Downloaded file is empty'));
+            return;
+          }
+          resolve();
+        } else {
+          reject(new Error('File was not saved'));
+        }
+      });
+      
+      file.on('error', (err) => {
+        file.close();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+        reject(err);
       });
     });
     
@@ -332,7 +355,7 @@ function downloadFile(url, outputPath) {
       if (fs.existsSync(outputPath)) {
         fs.unlinkSync(outputPath);
       }
-      reject(err);
+      reject(new Error(`Network error: ${err.message}`));
     });
     
     request.on('timeout', () => {
@@ -341,7 +364,7 @@ function downloadFile(url, outputPath) {
       if (fs.existsSync(outputPath)) {
         fs.unlinkSync(outputPath);
       }
-      reject(new Error('Download timeout'));
+      reject(new Error('Download timeout after 30 seconds'));
     });
     
     request.setTimeout(30000);
