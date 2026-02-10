@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 type Downloader struct {
@@ -77,9 +79,8 @@ func (d *Downloader) Download(url, outputPath string) error {
 		defer zlibReader.Close()
 		reader = zlibReader
 	} else if contentEncoding == "br" || contentEncoding == "brotli" {
-		// Brotli decompression would require a third-party library
-		// For now, we'll try to detect it from magic bytes after download
-		reader = resp.Body
+		brReader := brotli.NewReader(resp.Body)
+		reader = brReader
 	}
 
 	// Copy to file
@@ -88,12 +89,11 @@ func (d *Downloader) Download(url, outputPath string) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// Check if file needs decompression (magic bytes detection)
-	if contentEncoding == "" || contentEncoding == "br" || contentEncoding == "brotli" {
-		if err := d.checkAndDecompress(outputPath); err != nil {
-			// If decompression fails, file might not be compressed
-			// Continue anyway
-		}
+	// Always check if file needs decompression (magic bytes detection)
+	// Some servers compress without indicating it in headers
+	if err := d.checkAndDecompress(outputPath); err != nil {
+		// If decompression fails, file might not be compressed
+		// Continue anyway - the extraction will handle it
 	}
 
 	return nil
@@ -150,6 +150,15 @@ func (d *Downloader) checkAndDecompress(filePath string) error {
 		if err != nil {
 			return err
 		}
+	} else if compressionType == "br" {
+		// Try Brotli decompression
+		brReader := brotli.NewReader(bytes.NewReader(fileData))
+		var err error
+		decompressed, err = io.ReadAll(brReader)
+		if err != nil {
+			// If Brotli decompression fails, it might not actually be Brotli
+			return err
+		}
 	} else {
 		return nil // Unknown compression type
 	}
@@ -179,6 +188,32 @@ func detectCompressionFromBytes(buffer []byte) string {
 			if secondByte == 0x9C || secondByte == 0x01 || secondByte == 0xDA ||
 				secondByte == 0x5E || secondByte == 0xBB || secondByte == 0x94 {
 				return "deflate"
+			}
+		}
+	}
+
+	// Brotli detection - try to detect Brotli streams
+	// Brotli doesn't have a single magic byte pattern, but we can try common patterns
+	// If file looks binary and doesn't match gzip/zlib, try Brotli
+	if len(buffer) >= 4 {
+		// Check if it looks like binary data (not text)
+		isBinary := false
+		for i := 0; i < len(buffer) && i < 4; i++ {
+			if buffer[i] < 0x20 && buffer[i] != 0x09 && buffer[i] != 0x0A && buffer[i] != 0x0D {
+				isBinary = true
+				break
+			}
+		}
+		
+		// If binary and not gzip/zlib, might be Brotli
+		// Try common Brotli patterns
+		if isBinary {
+			// Brotli streams often have specific patterns in first bytes
+			// This is heuristic - we'll try decompression and see if it works
+			if (buffer[0] == 0xCE && buffer[1] == 0xB2) ||
+				(buffer[0] == 0x81 && (buffer[1] == 0x16 || buffer[1] == 0x01)) ||
+				(buffer[0] == 0x05 && buffer[1] == 0x26) { // Pattern seen in the file
+				return "br"
 			}
 		}
 	}
