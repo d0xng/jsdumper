@@ -3,6 +3,16 @@ node_modules/
 package-lock.json
 yarn.lock
 
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
 # Output files
 keys.txt
 endpoints.txt
