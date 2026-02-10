@@ -81,13 +81,28 @@ func (e *Extractor) extractSecrets(content, fileName string) []Secret {
 		})
 	}
 
-	// OAuth Client ID
-	clientIDPattern := regexp.MustCompile(`(?i)(?:client[_-]?id|oauth[_-]?client[_-]?id)\s*[:=]\s*['"]([A-Za-z0-9_-]{20,})['"]`)
+	// OAuth Client ID - expanded to catch OKTA_CLIENT_ID, etc.
+	// Pattern allows for optional spaces and different quote styles
+	clientIDPattern := regexp.MustCompile(`(?i)(?:client[_-]?id|oauth[_-]?client[_-]?id|okta[_-]?client[_-]?id)\s*[:=]\s*['"]([A-Za-z0-9_-]{15,})['"]`)
 	matches = clientIDPattern.FindAllStringSubmatch(content, -1)
 	for _, match := range matches {
 		if len(match) > 1 && hasHighEntropy(match[1], 3.5) {
 			secrets = append(secrets, Secret{
 				Type:     "CLIENT_ID",
+				File:     fileName,
+				Value:    match[1],
+				Severity: "MEDIUM",
+			})
+		}
+	}
+
+	// Authorization Server ID (Okta, Auth0, etc.)
+	authServerIDPattern := regexp.MustCompile(`(?i)(?:authorization[_-]?server[_-]?id|auth[_-]?server[_-]?id|.*[_-]?authorization[_-]?server[_-]?id)\s*[:=]\s*['"]([A-Za-z0-9_-]{15,})['"]`)
+	matches = authServerIDPattern.FindAllStringSubmatch(content, -1)
+	for _, match := range matches {
+		if len(match) > 1 && hasHighEntropy(match[1], 3.5) {
+			secrets = append(secrets, Secret{
+				Type:     "AUTHORIZATION_SERVER_ID",
 				File:     fileName,
 				Value:    match[1],
 				Severity: "MEDIUM",
@@ -407,8 +422,8 @@ func (e *Extractor) extractURLs(content string) []string {
 	urlPattern := regexp.MustCompile(`https?://[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+`)
 	matches := urlPattern.FindAllString(content, -1)
 	for _, match := range matches {
-		// Remove trailing punctuation that might have been captured
-		match = strings.TrimRight(match, ".,;:!?)")
+		// Remove trailing punctuation, quotes, and other characters that might have been captured
+		match = strings.TrimRight(match, ".,;:!?)'\"")
 		
 		normalized := normalizeURL(match)
 		if normalized != "" && !seen[normalized] {
