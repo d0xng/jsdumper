@@ -329,7 +329,27 @@ function downloadFile(url, outputPath) {
         return;
       }
       
-      response.pipe(file);
+      // Handle compression (gzip, deflate, br)
+      let stream = response;
+      const encoding = response.headers['content-encoding'];
+      
+      if (encoding === 'gzip') {
+        stream = response.pipe(zlib.createGunzip());
+      } else if (encoding === 'deflate') {
+        stream = response.pipe(zlib.createInflate());
+      } else if (encoding === 'br') {
+        stream = response.pipe(zlib.createBrotliDecompress());
+      }
+      
+      stream.pipe(file);
+      
+      stream.on('error', (err) => {
+        file.close();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+        reject(new Error(`Decompression error: ${err.message}`));
+      });
       
       file.on('finish', () => {
         file.close();
