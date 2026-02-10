@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Output files
+keys.txt
+endpoints.txt
+important-endpoints.txt
+urls.txt
+summary.json
+results*/
+results-*/
+
+# Downloaded files
+.jsdumper-downloads/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test files
+test-output/
+*.test.js
