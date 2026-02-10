@@ -13,6 +13,10 @@ A high-precision CLI tool for extracting security-relevant artifacts from JavaSc
 
 ## Installation
 
+### Requirements
+
+- Go 1.22 or higher
+
 ### Linux
 
 ```bash
@@ -22,21 +26,20 @@ sudo ./install.sh
 ```
 
 This will:
-- Install npm dependencies
+- Build the Go binary
 - Create a symlink in `/usr/bin/jsdumper`
 - Make the tool available system-wide
 
 ### Manual Installation
 
 ```bash
-npm install
-npm link  # Makes jsdumper available globally
+go build -o bin/jsdumper .
 ```
 
 Or use directly:
 
 ```bash
-node src/cli.js <input>
+go run . <input>
 ```
 
 ## Usage
@@ -83,25 +86,38 @@ Options:
 
 ## Output Files
 
-The tool generates three output files:
+The tool generates four output files:
 
 ### keys.txt
-Contains detected secrets and keys with severity levels:
+Contains detected secrets and keys (full values shown):
 
 ```
-[HIGH] AWS_SECRET_ACCESS_KEY | AKIA**** | file: app.js
-[MEDIUM] JWT | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-[HIGH] STRIPE_KEY | sk_live_******** | file: payment.js
+AWS_ACCESS_KEY_ID | app.js | AKIAIOSFODNN7EXAMPLE
+JWT | app.js | eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+STRIPE_SECRET_KEY | payment.js | sk_live_51Hqw2EXAMPLE
 ```
 
 ### endpoints.txt
-List of discovered API endpoints:
+List of all discovered endpoints (including corporate pages, content management, etc.):
 
 ```
 /api/v1/users
 /auth/login
 /admin/export
 /graphql
+/business
+/privacy-center
+```
+
+### important-endpoints.txt
+Filtered list of high-value API endpoints only:
+
+```
+/api/v1/users
+/auth/login
+/admin/export
+/graphql
+/v1/tokens
 ```
 
 ### urls.txt
@@ -131,7 +147,8 @@ Statistics and summary when using `--json` flag:
     }
   },
   "endpoints": {
-    "total": 15
+    "total": 15,
+    "important": 8
   },
   "urls": {
     "total": 8
@@ -217,6 +234,7 @@ Processing: src/api.js
 === Extraction Summary ===
 Secrets found: 8
 Endpoints found: 67
+  Important: 23
 URLs found: 23
 
 Results written to: ./results
@@ -235,26 +253,35 @@ $ cat minified.js | jsdumper - --quiet
 
 ```
 jsdumper/
-├── src/
-│   ├── cli.js              # CLI entry point
-│   ├── patterns.js          # Regex pattern definitions
-│   ├── utils.js            # Utility functions (entropy, normalization)
-│   └── extractors/
-│       ├── secrets.js      # Secrets extraction logic
-│       ├── endpoints.js     # Endpoints extraction logic
-│       └── urls.js         # URLs extraction logic
+├── main.go                  # CLI entry point
+├── cli.go                   # CLI logic and file processing
+├── extractor.go             # Secrets, endpoints, and URLs extraction
+├── downloader.go            # Remote file download with auto-decompression
+├── utils.go                 # Utility functions (entropy, normalization)
+├── results.go               # Results aggregation and formatting
+├── patterns.go              # Regex pattern definitions (structure)
+├── colors.go                # Color constants for output
 ├── bin/
-│   └── jsdumper            # Executable script
-├── package.json
+│   └── jsdumper             # Compiled binary
+├── go.mod                   # Go module definition
+├── go.sum                   # Go dependencies checksums
+├── install.sh               # Linux installation script
 └── README.md
 ```
 
 ## Security Considerations
 
 - **Accuracy over Quantity**: The tool prioritizes precision and avoids low-confidence findings
-- **Masked Output**: Sensitive values are partially masked in output files
+- **Full Values Shown**: Secrets are displayed in full (not masked) for security research purposes
 - **Research Use**: Intended for security research and authorized bug bounty activities
-- **No Network Calls**: The tool only analyzes local files, no external requests
+- **Remote Downloads**: The tool can download and analyze remote JavaScript files with automatic decompression support (gzip, deflate, brotli)
+
+## Features
+
+- **Automatic Decompression**: Handles gzip, deflate, and Brotli compressed files automatically
+- **Remote URL Support**: Download and analyze JavaScript files from URLs
+- **Batch Processing**: Process multiple URLs from a text file
+- **High Performance**: Written in Go for fast processing of large files
 
 ## Limitations
 
