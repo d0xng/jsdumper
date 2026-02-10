@@ -52,6 +52,19 @@ async function processFile(filePath) {
     const content = await readFile(filePath);
     const fileName = path.basename(filePath);
     
+    // Check if file is empty or HTML error page
+    if (!content || content.length === 0) {
+      log(`Warning: File ${fileName} is empty`, 'yellow');
+      return null;
+    }
+    
+    // Check if it's an HTML error page
+    if (content.trim().startsWith('<!DOCTYPE') || content.trim().startsWith('<html') || content.includes('<html')) {
+      log(`Warning: File ${fileName} appears to be HTML, not JavaScript`, 'yellow');
+      log(`First 200 chars: ${content.substring(0, 200)}`, 'dim');
+      return null;
+    }
+    
     const secrets = extractAllSecrets(content, fileName);
     const endpoints = extractAllEndpoints(content);
     const urls = extractAllUrls(content);
