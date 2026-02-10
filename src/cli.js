@@ -343,6 +343,12 @@ async function main() {
   const url = program.opts().url;
   const listFile = program.opts().list;
   
+  // If no input, URL, or list file provided, show help
+  if (!input && !url && !listFile && input !== '-') {
+    program.help();
+    return;
+  }
+  
   let results = [];
   
   try {
