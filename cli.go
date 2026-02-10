@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 type Config struct {
 	OutputDir string
 	Append    bool
@@ -279,15 +286,55 @@ func (c *CLI) ProcessStdin() error {
 }
 
 func (c *CLI) processContent(content, fileName string) error {
-	// Check if file is empty or HTML
+	// Check if file is empty
 	if len(content) == 0 {
 		c.log(fmt.Sprintf("Warning: File %s is empty", fileName), colorYellow)
 		return nil
 	}
 
 	trimmed := strings.TrimSpace(content)
-	if strings.HasPrefix(trimmed, "<!DOCTYPE") || strings.HasPrefix(trimmed, "<html") || strings.Contains(trimmed, "<html") {
+	
+	// More precise HTML detection - only check the very beginning of the file
+	// JavaScript files can contain "<html" in strings/comments, but real HTML files
+	// will start with HTML tags
+	isHTML := false
+	firstChars := strings.ToLower(trimmed)
+	if len(firstChars) > 0 {
+		// Check for HTML document structure at the start
+		if strings.HasPrefix(firstChars, "<!doctype") ||
+			strings.HasPrefix(firstChars, "<html") ||
+			strings.HasPrefix(firstChars, "<?xml") {
+			isHTML = true
+		}
+		
+		// Additional check: if first 500 chars contain multiple HTML tags, it's likely HTML
+		if !isHTML && len(trimmed) > 500 {
+			first500 := strings.ToLower(trimmed[:500])
+			htmlTagCount := strings.Count(first500, "<html") +
+				strings.Count(first500, "<head") +
+				strings.Count(first500, "<body") +
+				strings.Count(first500, "<div") +
+				strings.Count(first500, "<script")
+			// If we see many HTML tags at the start, it's likely HTML
+			// But also check if it looks like JavaScript (has function, var, const, etc.)
+			jsIndicators := strings.Count(first500, "function") +
+				strings.Count(first500, "var ") +
+				strings.Count(first500, "const ") +
+				strings.Count(first500, "let ") +
+				strings.Count(first500, "=>") +
+				strings.Count(first500, "()")
+			
+			// If HTML tags outnumber JS indicators significantly, it's HTML
+			if htmlTagCount > 3 && htmlTagCount > jsIndicators*2 {
+				isHTML = true
+			}
+		}
+	}
+	
+	if isHTML {
 		c.log(fmt.Sprintf("Warning: File %s appears to be HTML, not JavaScript", fileName), colorYellow)
+		c.log(fmt.Sprintf("First 200 chars: %s", trimmed[:min(200, len(trimmed))]), colorDim)
+		// Some servers return HTML error pages instead of the JS file
 		return nil
 	}
 

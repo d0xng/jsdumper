@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	urlpkg "net/url"
 	"os"
 	"strings"
 	"time"
@@ -48,6 +49,27 @@ func (d *Downloader) Download(url, outputPath string) error {
 		return fmt.Errorf("failed to download: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Handle redirects manually if needed
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 && resp.Header.Get("Location") != "" {
+		redirectURL := resp.Header.Get("Location")
+		// Handle relative redirects
+		if !strings.HasPrefix(redirectURL, "http") {
+			if strings.HasPrefix(redirectURL, "/") {
+				u, err := urlpkg.Parse(url)
+				if err == nil {
+					redirectURL = u.Scheme + "://" + u.Host + redirectURL
+				}
+			} else {
+				baseURL := url
+				if lastSlash := strings.LastIndex(baseURL, "/"); lastSlash != -1 {
+					baseURL = baseURL[:lastSlash+1]
+				}
+				redirectURL = baseURL + redirectURL
+			}
+		}
+		return d.Download(redirectURL, outputPath)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)

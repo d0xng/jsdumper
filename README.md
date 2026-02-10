@@ -217,9 +217,12 @@ Secrets found: 3
   MEDIUM: 1
   LOW: 0
 Endpoints found: 12
+  Important: 8
 URLs found: 5
 
 Results written to: /path/to/output
+  - endpoints.txt (all endpoints)
+  - important-endpoints.txt (API endpoints only)
 ```
 
 ### Example 2: Directory Analysis
